@@ -2,18 +2,18 @@
 
 *.exe
 *.pdb
-src/bitcoin
-src/bitcoind
-src/bitcoin-cli
-src/bitcoin-gui
-src/bitcoin-node
-src/bitcoin-tx
-src/bitcoin-util
-src/bitcoin-wallet
+src/satcoin
+src/satcoind
+src/satcoin-cli
+src/satcoin-gui
+src/satcoin-node
+src/satcoin-tx
+src/satcoin-util
+src/satcoin-wallet
 src/test/fuzz/*
 !src/test/fuzz/*.*
-src/test/test_bitcoin
-src/qt/test/test_bitcoin-qt
+src/test/test_satcoin
+src/qt/test/test_satcoin-qt
 
 # autoreconf
 Makefile.in
@@ -94,8 +94,8 @@ src/qt/bitcoin-qt.includes
 *.qm
 Makefile
 !depends/Makefile
-src/qt/bitcoin-qt
-Bitcoin-Qt.app
+src/qt/satcoin-qt
+Satcoin-Qt.app
 background.tiff*
 
 # Qt Creator
@@ -103,7 +103,7 @@ Makefile.am.user
 
 # Unit-tests
 Makefile.test
-bitcoin-qt_test
+satcoin-qt_test
 
 # Resources cpp
 qrc_*.cpp
@@ -149,4 +149,3 @@ db4/
 
 osx_volname
 dist/
-*.background.tiff
