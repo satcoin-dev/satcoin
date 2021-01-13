@@ -127,7 +127,7 @@ minimum relay feerate. The initial minimum relay feerate is set to
 Bitcoin Core 0.12 also introduces new default policy limits on the length and
 size of unconfirmed transaction chains that are allowed in the mempool
 (generally limiting the length of unconfirmed chains to 25 transactions, with a
-total size of 101 KB).  These limits can be overridden using command line
+total size of 101 KB).  These limits can be overriden using command line
 arguments; see the extended help (`--help -help-debug`) for more information.
 
 Opt-in Replace-by-fee transactions
@@ -410,9 +410,9 @@ arbitrary TCP connections inside SSL. On e.g. Ubuntu it can be installed with:
 
     sudo apt-get install stunnel4
 
-Then, to tunnel a SSL connection on 28332 to a RPC server bound on localhost on port 18332 do:
+Then, to tunnel a SSL connection on 28866 to a RPC server bound on localhost on port 18866 do:
 
-    stunnel -d 28332 -r 127.0.0.1:18332 -p stunnel.pem -P ''
+    stunnel -d 28866 -r 127.0.0.1:18866 -p stunnel.pem -P ''
 
 It can also be set up system-wide in inetd style.
 

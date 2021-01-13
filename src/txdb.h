@@ -1,17 +1,16 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2020 The Bitcoin Core developers
+// Copyright (c) 2009-2016 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_TXDB_H
 #define BITCOIN_TXDB_H
 
-#include <coins.h>
-#include <dbwrapper.h>
-#include <chain.h>
-#include <primitives/block.h>
+#include "coins.h"
+#include "dbwrapper.h"
+#include "chain.h"
 
-#include <memory>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -20,6 +19,8 @@ class CBlockIndex;
 class CCoinsViewDBCursor;
 class uint256;
 
+//! No need to periodic flush if at least this much space still available.
+static constexpr int MAX_BLOCK_COINSDB_USAGE = 10;
 //! -dbcache default (MiB)
 static const int64_t nDefaultDbCache = 450;
 //! -dbbatchsize default (bytes)
@@ -33,27 +34,42 @@ static const int64_t nMaxBlockDBCache = 2;
 //! Max memory allocated to block tree DB specific cache, if -txindex (MiB)
 // Unlike for the UTXO database, for the txindex scenario the leveldb cache make
 // a meaningful difference: https://github.com/bitcoin/bitcoin/pull/8273#issuecomment-229601991
-static const int64_t nMaxTxIndexCache = 1024;
-//! Max memory allocated to all block filter index caches combined in MiB.
-static const int64_t max_filter_index_cache = 1024;
+static const int64_t nMaxBlockDBAndTxIndexCache = 1024;
 //! Max memory allocated to coin DB specific cache (MiB)
 static const int64_t nMaxCoinsDBCache = 8;
 
-// Actually declared in validation.cpp; can't include because of circular dependency.
-extern RecursiveMutex cs_main;
+struct CDiskTxPos : public CDiskBlockPos
+{
+    unsigned int nTxOffset; // after header
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(*(CDiskBlockPos*)this);
+        READWRITE(VARINT(nTxOffset));
+    }
+
+    CDiskTxPos(const CDiskBlockPos &blockIn, unsigned int nTxOffsetIn) : CDiskBlockPos(blockIn.nFile, blockIn.nPos), nTxOffset(nTxOffsetIn) {
+    }
+
+    CDiskTxPos() {
+        SetNull();
+    }
+
+    void SetNull() {
+        CDiskBlockPos::SetNull();
+        nTxOffset = 0;
+    }
+};
 
 /** CCoinsView backed by the coin database (chainstate/) */
-class CCoinsViewDB final : public CCoinsView
+class CCoinsViewDB : public CCoinsView
 {
 protected:
-    std::unique_ptr<CDBWrapper> m_db;
-    fs::path m_ldb_path;
-    bool m_is_memory;
+    CDBWrapper db;
 public:
-    /**
-     * @param[in] ldb_path    Location in the filesystem where leveldb data will be stored.
-     */
-    explicit CCoinsViewDB(fs::path ldb_path, size_t nCacheSize, bool fMemory, bool fWipe);
+    CCoinsViewDB(size_t nCacheSize, bool fMemory = false, bool fWipe = false);
 
     bool GetCoin(const COutPoint &outpoint, Coin &coin) const override;
     bool HaveCoin(const COutPoint &outpoint) const override;
@@ -65,9 +81,6 @@ public:
     //! Attempt to update from an older database format. Returns whether an error occurred.
     bool Upgrade();
     size_t EstimateSize() const override;
-
-    //! Dynamically alter the underlying leveldb cache size.
-    void ResizeCache(size_t new_cache_size) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 };
 
 /** Specialization of CCoinsViewCursor to iterate over a CCoinsViewDB */
@@ -96,13 +109,18 @@ private:
 class CBlockTreeDB : public CDBWrapper
 {
 public:
-    explicit CBlockTreeDB(size_t nCacheSize, bool fMemory = false, bool fWipe = false);
-
+    CBlockTreeDB(size_t nCacheSize, bool fMemory = false, bool fWipe = false);
+private:
+    CBlockTreeDB(const CBlockTreeDB&);
+    void operator=(const CBlockTreeDB&);
+public:
     bool WriteBatchSync(const std::vector<std::pair<int, const CBlockFileInfo*> >& fileInfo, int nLastFile, const std::vector<const CBlockIndex*>& blockinfo);
-    bool ReadBlockFileInfo(int nFile, CBlockFileInfo &info);
+    bool ReadBlockFileInfo(int nFile, CBlockFileInfo &fileinfo);
     bool ReadLastBlockFile(int &nFile);
-    bool WriteReindexing(bool fReindexing);
-    void ReadReindexing(bool &fReindexing);
+    bool WriteReindexing(bool fReindex);
+    bool ReadReindexing(bool &fReindex);
+    bool ReadTxIndex(const uint256 &txid, CDiskTxPos &pos);
+    bool WriteTxIndex(const std::vector<std::pair<uint256, CDiskTxPos> > &list);
     bool WriteFlag(const std::string &name, bool fValue);
     bool ReadFlag(const std::string &name, bool &fValue);
     bool LoadBlockIndexGuts(const Consensus::Params& consensusParams, std::function<CBlockIndex*(const uint256&)> insertBlockIndex);

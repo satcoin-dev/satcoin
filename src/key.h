@@ -1,45 +1,39 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2019 The Bitcoin Core developers
-// Copyright (c) 2017 The Zcash developers
+// Copyright (c) 2009-2016 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_KEY_H
 #define BITCOIN_KEY_H
 
-#include <pubkey.h>
-#include <serialize.h>
-#include <support/allocators/secure.h>
-#include <uint256.h>
+#include "pubkey.h"
+#include "serialize.h"
+#include "support/allocators/secure.h"
+#include "uint256.h"
 
 #include <stdexcept>
 #include <vector>
 
 
 /**
+ * secp256k1:
+ * const unsigned int PRIVATE_KEY_SIZE = 279;
+ * const unsigned int PUBLIC_KEY_SIZE  = 65;
+ * const unsigned int SIGNATURE_SIZE   = 72;
+ *
+ * see www.keylength.com
+ * script supports up to 75 for single byte push
+ */
+
+/**
  * secure_allocator is defined in allocators.h
- * CPrivKey is a serialized private key, with all parameters included
- * (SIZE bytes)
+ * CPrivKey is a serialized private key, with all parameters included (279 bytes)
  */
 typedef std::vector<unsigned char, secure_allocator<unsigned char> > CPrivKey;
 
 /** An encapsulated private key. */
 class CKey
 {
-public:
-    /**
-     * secp256k1:
-     */
-    static const unsigned int SIZE            = 279;
-    static const unsigned int COMPRESSED_SIZE = 214;
-    /**
-     * see www.keylength.com
-     * script supports up to 75 for single byte push
-     */
-    static_assert(
-        SIZE >= COMPRESSED_SIZE,
-        "COMPRESSED_SIZE is larger than SIZE");
-
 private:
     //! Whether this private key is valid. We check for correctness when modifying the key
     //! data, so fValid should always correspond to the actual state.
@@ -60,6 +54,11 @@ public:
     {
         // Important: vch must be 32 bytes in length to not break serialization
         keydata.resize(32);
+    }
+
+    //! Destructor (again necessary because of memlocking).
+    ~CKey()
+    {
     }
 
     friend bool operator==(const CKey& a, const CKey& b)
@@ -98,9 +97,6 @@ public:
     //! Generate a new private key using a cryptographic PRNG.
     void MakeNewKey(bool fCompressed);
 
-    //! Negate private key
-    bool Negate();
-
     /**
      * Convert the private key to a CPrivKey (serialized OpenSSL private key data).
      * This is expensive.
@@ -117,7 +113,7 @@ public:
      * Create a DER-serialized signature.
      * The test_case parameter tweaks the deterministic nonce.
      */
-    bool Sign(const uint256& hash, std::vector<unsigned char>& vchSig, bool grind = true, uint32_t test_case = 0) const;
+    bool Sign(const uint256& hash, std::vector<unsigned char>& vchSig, uint32_t test_case = 0) const;
 
     /**
      * Create a compact signature (65 bytes), which allows reconstructing the used public key.
@@ -138,7 +134,7 @@ public:
     bool VerifyPubKey(const CPubKey& vchPubKey) const;
 
     //! Load private key and check that public key matches.
-    bool Load(const CPrivKey& privkey, const CPubKey& vchPubKey, bool fSkipCheck);
+    bool Load(CPrivKey& privkey, CPubKey& vchPubKey, bool fSkipCheck);
 };
 
 struct CExtKey {
@@ -161,16 +157,35 @@ struct CExtKey {
     void Decode(const unsigned char code[BIP32_EXTKEY_SIZE]);
     bool Derive(CExtKey& out, unsigned int nChild) const;
     CExtPubKey Neuter() const;
-    void SetSeed(const unsigned char* seed, unsigned int nSeedLen);
+    void SetMaster(const unsigned char* seed, unsigned int nSeedLen);
+    template <typename Stream>
+    void Serialize(Stream& s) const
+    {
+        unsigned int len = BIP32_EXTKEY_SIZE;
+        ::WriteCompactSize(s, len);
+        unsigned char code[BIP32_EXTKEY_SIZE];
+        Encode(code);
+        s.write((const char *)&code[0], len);
+    }
+    template <typename Stream>
+    void Unserialize(Stream& s)
+    {
+        unsigned int len = ::ReadCompactSize(s);
+        unsigned char code[BIP32_EXTKEY_SIZE];
+        if (len != BIP32_EXTKEY_SIZE)
+            throw std::runtime_error("Invalid extended key size\n");
+        s.read((char *)&code[0], len);
+        Decode(code);
+    }
 };
 
 /** Initialize the elliptic curve support. May not be called twice without calling ECC_Stop first. */
-void ECC_Start();
+void ECC_Start(void);
 
 /** Deinitialize the elliptic curve support. No-op if ECC_Start wasn't called first. */
-void ECC_Stop();
+void ECC_Stop(void);
 
 /** Check that required EC support is available at runtime. */
-bool ECC_InitSanityCheck();
+bool ECC_InitSanityCheck(void);
 
 #endif // BITCOIN_KEY_H
